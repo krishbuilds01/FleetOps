@@ -18,19 +18,22 @@ function App() {
   const [vehicles, setVehicles] = useState(INITIAL_VEHICLES);
   const [logs, setLogs] = useState(INITIAL_LOGS);
 
-  
   useEffect(() => {
     const fetchData = async () => {
       try {
         const fetchedVehicles = await api.getVehicles();
-        setVehicles(fetchedVehicles);
+        if (fetchedVehicles && fetchedVehicles.length > 0) {
+          setVehicles(fetchedVehicles);
+        }
       } catch {
         console.warn('Backend API connection failed, running in sandbox mode with local vehicle state.');
       }
 
       try {
         const fetchedLogs = await api.getLogs();
-        setLogs(fetchedLogs);
+        if (fetchedLogs && fetchedLogs.length > 0) {
+          setLogs(fetchedLogs);
+        }
       } catch {
         console.warn('Backend API connection failed, running in sandbox mode with local event logs.');
       }
@@ -41,7 +44,6 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
@@ -114,7 +116,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen flex flex-col bg-white selection:bg-blue-100 selection:text-blue-900 relative">
       {view === 'login' ? (
         <Login onNavigate={navigateTo} onLogin={handleLogin} />
       ) : (

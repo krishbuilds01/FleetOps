@@ -30,7 +30,7 @@ if (!process.env.MONGODB_URI) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-let MONGODB_URI = process.env.MONGODB_URI;
+let MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fleetops';
 if (MONGODB_URI) {
   MONGODB_URI = MONGODB_URI.trim();
   if (MONGODB_URI.toLowerCase().startsWith('mongodb_uri=')) {
@@ -65,7 +65,7 @@ let dbConnectionError = null;
 // Database connection middleware to ensure connection on serverless functions
 const connectDbMiddleware = async (req, res, next) => {
   if (MONGODB_URI && mongoose.connection.readyState === 0) {
-    console.log(`Connecting to MongoDB... Current state: ${mongoose.connection.readyState}`);
+    console.log(`Connecting to MongoDB (${MONGODB_URI})... Current state: ${mongoose.connection.readyState}`);
     try {
       await mongoose.connect(MONGODB_URI);
       dbConnectionError = null;
@@ -87,7 +87,7 @@ const connectDbMiddleware = async (req, res, next) => {
   // If database connection is not established, fail fast instead of letting queries hang
   if (MONGODB_URI && mongoose.connection.readyState !== 1) {
     return res.status(500).json({
-      error: `Database connection error: Connection state is ${mongoose.connection.readyState}. Details: ${dbConnectionError || 'Unknown connection error. Please ensure your IP address is whitelisted in MongoDB Atlas Network Access.'}`
+      error: `Database connection error: Connection state is ${mongoose.connection.readyState}. Details: ${dbConnectionError || 'Unknown connection error.'}`
     });
   }
   next();
@@ -97,17 +97,17 @@ app.use(connectDbMiddleware);
 
 // Verify MongoDB URI is present and connect
 if (!MONGODB_URI) {
-  console.warn('⚠️ MONGODB_URI is not defined in the environment variables. The server will run in fallback in-memory mode or wait for configuration.');
+  console.warn('⚠️ MONGODB_URI is not defined.');
 } else {
   mongoose.connect(MONGODB_URI)
     .then(async () => {
-      console.log('✅ Connected to MongoDB Atlas successfully.');
+      console.log(`✅ Connected to MongoDB (${MONGODB_URI}) successfully.`);
       dbConnectionError = null;
       await seedDatabase();
     })
     .catch(err => {
       console.error('❌ MongoDB connection error:', err.message);
-      dbConnectionError = `${err.message}. Ensure that your IP is whitelisted in your MongoDB Atlas console.`;
+      dbConnectionError = `${err.message}`;
     });
 }
 
@@ -116,73 +116,159 @@ const getFormattedTime = () => {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
-// Global Mock Report Data for seeding and in-memory fallback
+// Global Indian Mock Report Data for seeding and fallback
 const MOCK_REPORT_DATA = [
-  { date: new Date(), vehId: 'VAN-101', driver: 'Alex Rivera', status: 'En Route', shift: '08:00 UTC', hours: '4.5', note: 'Sector 4 delivery completed' },
-  { date: new Date(), vehId: 'VAN-102', driver: 'Samantha Smith', status: 'En Route', shift: '08:15 UTC', hours: '4.2', note: 'North Hub route active' },
-  { date: new Date(), vehId: 'VAN-104', driver: 'David Kim', status: 'Maintenance', shift: '07:15 UTC', hours: '2.0', note: 'Flat right tire' },
-  { date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), vehId: 'VAN-103', driver: 'Marcus Chen', status: 'Idle', shift: 'Not Started', hours: '0.0', note: 'Base Depot' },
-  { date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), vehId: 'VAN-101', driver: 'Alex Rivera', status: 'En Route', shift: '08:00 UTC', hours: '7.5', note: 'Route 66 delivery' },
-  { date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), vehId: 'VAN-105', driver: 'Sarah Jenkins', status: 'Idle', shift: '10:00 UTC', hours: '6.0', note: 'Depot B' },
-  { date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), vehId: 'VAN-102', driver: 'Samantha Smith', status: 'Idle', shift: '08:15 UTC', hours: '8.0', note: 'Completed shift' },
-  { date: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), vehId: 'VAN-104', driver: 'David Kim', status: 'Maintenance', shift: '07:00 UTC', hours: '4.0', note: 'Oil change service' }
+  { date: new Date(), vehId: 'TRK-101', driver: 'Rajesh Kumar', status: 'En Route', shift: '08:00 IST', hours: '4.5', note: 'Mumbai to Pune transit active' },
+  { date: new Date(), vehId: 'TRK-102', driver: 'Amit Sharma', status: 'En Route', shift: '08:15 IST', hours: '4.2', note: 'Delhi to Jaipur expressway clear' },
+  { date: new Date(), vehId: 'TRK-106', driver: 'Anil Yadav', status: 'Maintenance', shift: '07:15 IST', hours: '2.0', note: 'Kolkata dock tire pressure service' },
+  { date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), vehId: 'TRK-103', driver: 'Suresh Verma', status: 'En Route', shift: '09:00 IST', hours: '6.0', note: 'Bengaluru to Chennai corridor' },
+  { date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), vehId: 'TRK-105', driver: 'Priya Patel', status: 'En Route', shift: '08:00 IST', hours: '7.5', note: 'Hyderabad to Vijayawada highway' },
+  { date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), vehId: 'TRK-104', driver: 'Vikram Singh', status: 'Idle', shift: '10:00 IST', hours: '5.0', note: 'Ahmedabad Logistics Yard' }
 ];
 
-// Database seeding helper
+// Database seeding helper for Indian Fleet Data
 async function seedDatabase() {
   try {
     // 1. Seed Users
-    const userCount = await User.countDocuments();
-    if (userCount === 0) {
-      console.log('🌱 Seeding default users...');
-      const seedUsers = [
-        { email: 'admin@fleetops.com', password: 'admin123', role: 'admin' },
-        { email: 'manager@fleetops.com', password: 'manager123', role: 'manager' },
-        { email: 'driver@fleetops.com', password: 'driver123', role: 'driver' }
-      ];
-      await User.insertMany(seedUsers);
-      console.log('✅ Seeding users completed.');
-    }
+    await User.deleteMany({});
+    console.log('🌱 Seeding Indian Fleet users...');
+    const seedUsers = [
+      { email: 'admin@fleetops.com', password: 'admin123', role: 'admin' },
+      { email: 'manager@fleetops.com', password: 'manager123', role: 'manager' },
+      { email: 'driver@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'rajesh.kumar@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'amit.sharma@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'suresh.verma@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'vikram.singh@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'priya.patel@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'anil.yadav@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'ramesh.gupta@fleetops.com', password: 'driver123', role: 'driver' },
+      { email: 'deepak.reddy@fleetops.com', password: 'driver123', role: 'driver' }
+    ];
+    await User.insertMany(seedUsers);
+    console.log('✅ Seeding users completed.');
 
-    // 2. Seed Vehicles
-    const vehicleCount = await Vehicle.countDocuments();
-    if (vehicleCount === 0) {
-      console.log('🌱 Seeding default vehicles...');
-      const seedVehicles = [
-        { id: 'FO-101', driver: 'Marcus Vance', type: 'Semi-Truck (Class 8)', status: 'En Route', fuel: 78, speed: 62, location: 'Denver, CO', destination: 'Salt Lake City, UT', telemetry: { temp: 195, load: 'Produce (22 tons)', pressure: '110 psi' }, alerts: [] },
-        { id: 'FO-102', driver: 'Sarah Connor', type: 'Delivery Van', status: 'En Route', fuel: 92, speed: 45, location: 'Seattle, WA', destination: 'Bellevue, WA', telemetry: { temp: 180, load: 'Electronics (1.2 tons)', pressure: '35 psi' }, alerts: [] },
-        { id: 'FO-103', driver: 'N/A', type: 'Box Truck', status: 'Idle', fuel: 45, speed: 0, location: 'Austin, TX', destination: 'N/A (Depot A)', telemetry: { temp: 75, load: 'Empty', pressure: '85 psi' }, alerts: [] },
-        { id: 'FO-104', driver: 'N/A', type: 'Semi-Truck (Class 8)', status: 'Maintenance', fuel: 12, speed: 0, location: 'Chicago, IL', destination: 'Service Center 4', telemetry: { temp: 240, load: 'None', pressure: '90 psi' }, alerts: [{ id: 'a1', severity: 'high', type: 'Engine Overheat', message: 'Coolant temperature above threshold (240°F)' }] },
-        { id: 'FO-105', driver: 'Alex Mercer', type: 'Delivery Van', status: 'En Route', fuel: 55, speed: 38, location: 'New York, NY', destination: 'Brooklyn, NY', telemetry: { temp: 185, load: 'Parcels (0.8 tons)', pressure: '34 psi' }, alerts: [] },
-        { id: 'FO-106', driver: 'James Wilson', type: 'Box Truck', status: 'En Route', fuel: 64, speed: 52, location: 'Atlanta, GA', destination: 'Savannah, GA', telemetry: { temp: 190, load: 'Furniture (4.5 tons)', pressure: '88 psi' }, alerts: [] },
-        { id: 'FO-107', driver: 'N/A', type: 'Semi-Truck (Class 8)', status: 'Idle', fuel: 89, speed: 0, location: 'Los Angeles, CA', destination: 'N/A (Depot C)', telemetry: { temp: 80, load: 'Empty', pressure: '108 psi' }, alerts: [] },
-        { id: 'FO-108', driver: 'N/A', type: 'Flatbed Truck', status: 'Maintenance', fuel: 34, speed: 0, location: 'Phoenix, AZ', destination: 'Maintenance Yard B', telemetry: { temp: 120, load: 'Steel Rails (12 tons)', pressure: '95 psi' }, alerts: [{ id: 'a2', severity: 'medium', type: 'Brake Wear', message: 'Rear brake pads at 15% life' }] }
-      ];
-      await Vehicle.insertMany(seedVehicles);
-      console.log('✅ Seeding vehicles completed.');
-    }
+    // 2. Seed Vehicles with Indian Drivers, Models, & Locations
+    await Vehicle.deleteMany({});
+    console.log('🌱 Seeding Indian Fleet vehicles in MongoDB...');
+    const seedVehicles = [
+      {
+        id: 'TRK-101',
+        driver: 'Rajesh Kumar',
+        type: 'Tata Prima 4928.S (Heavy Hauler)',
+        status: 'En Route',
+        fuel: 85,
+        speed: 55,
+        location: 'Mumbai Central Logistics Hub (MH)',
+        destination: 'Pune Industrial Corridor',
+        telemetry: { temp: 185, load: 'Cotton Bales (24 tons)', pressure: '115 psi' },
+        alerts: []
+      },
+      {
+        id: 'TRK-102',
+        driver: 'Amit Sharma',
+        type: 'Ashok Leyland Captain 4019',
+        status: 'En Route',
+        fuel: 92,
+        speed: 48,
+        location: 'Delhi-NCR Freight Expressway (DL)',
+        destination: 'Jaipur Transport Hub',
+        telemetry: { temp: 180, load: 'Auto Spare Parts (14 tons)', pressure: '110 psi' },
+        alerts: []
+      },
+      {
+        id: 'TRK-103',
+        driver: 'Suresh Verma',
+        type: 'BharatBenz 2823C Tipper',
+        status: 'En Route',
+        fuel: 76,
+        speed: 52,
+        location: 'Bengaluru Electronic City Gate (KA)',
+        destination: 'Chennai Sea Port Terminal',
+        telemetry: { temp: 190, load: 'Electronics & Chips (8.5 tons)', pressure: '108 psi' },
+        alerts: []
+      },
+      {
+        id: 'TRK-104',
+        driver: 'Vikram Singh',
+        type: 'Eicher Pro 6028 Cargo',
+        status: 'Idle',
+        fuel: 68,
+        speed: 0,
+        location: 'Ahmedabad Logistics Park (GJ)',
+        destination: 'Surat Textile Hub',
+        telemetry: { temp: 82, load: 'Textile Fabric Rolls (10 tons)', pressure: '105 psi' },
+        alerts: []
+      },
+      {
+        id: 'TRK-105',
+        driver: 'Priya Patel',
+        type: 'Mahindra Blazo X 49',
+        status: 'En Route',
+        fuel: 88,
+        speed: 60,
+        location: 'Hyderabad Outer Ring Highway (TS)',
+        destination: 'Vijayawada Freight Terminal',
+        telemetry: { temp: 188, load: 'Pharmaceutical Supplies (5 tons)', pressure: '112 psi' },
+        alerts: []
+      },
+      {
+        id: 'TRK-106',
+        driver: 'Anil Yadav',
+        type: 'Tata Signa 4825.T Multi-Axle',
+        status: 'Maintenance',
+        fuel: 25,
+        speed: 0,
+        location: 'Kolkata Haldia Dock Complex (WB)',
+        destination: 'Maintenance Workshop Yard 4',
+        telemetry: { temp: 220, load: 'Iron Ore (28 tons)', pressure: '95 psi' },
+        alerts: [{ id: 'a1', severity: 'high', type: 'Tire Pressure Warning', message: 'Low tire pressure on rear tandem axle (95 psi)' }]
+      },
+      {
+        id: 'TRK-107',
+        driver: 'Ramesh Gupta',
+        type: 'Eicher Pro 3019 Intercity Truck',
+        status: 'Idle',
+        fuel: 95,
+        speed: 0,
+        location: 'Indore Transport Yard (MP)',
+        destination: 'Bhopal Central Depot',
+        telemetry: { temp: 78, load: 'Agricultural Produce (16 tons)', pressure: '110 psi' },
+        alerts: []
+      },
+      {
+        id: 'TRK-108',
+        driver: 'Deepak Reddy',
+        type: 'BharatBenz 1617R Reefer Truck',
+        status: 'En Route',
+        fuel: 82,
+        speed: 50,
+        location: 'Kochi Container Terminal (KL)',
+        destination: 'Coimbatore Cold Storage Yard',
+        telemetry: { temp: 175, load: 'Refrigerated Dairy (12 tons)', pressure: '108 psi' },
+        alerts: []
+      }
+    ];
+    await Vehicle.insertMany(seedVehicles);
+    console.log('✅ Seeding Indian vehicles completed.');
 
     // 3. Seed Logs
-    const logCount = await Log.countDocuments();
-    if (logCount === 0) {
-      console.log('🌱 Seeding default logs...');
-      const seedLogs = [
-        { timestamp: '11:40 AM', vehicleId: 'FO-102', event: 'Status updated to En Route', type: 'info' },
-        { timestamp: '11:35 AM', vehicleId: 'FO-104', event: 'High engine temperature warning detected', type: 'warning' },
-        { timestamp: '11:20 AM', vehicleId: 'FO-108', event: 'Scheduled maintenance check-in', type: 'info' },
-        { timestamp: '11:05 AM', vehicleId: 'FO-103', event: 'Arrived at Austin Depot A', type: 'success' }
-      ];
-      await Log.insertMany(seedLogs);
-      console.log('✅ Seeding logs completed.');
-    }
+    await Log.deleteMany({});
+    console.log('🌱 Seeding Indian Fleet logs...');
+    const seedLogs = [
+      { timestamp: '02:30 PM', vehicleId: 'TRK-101', event: 'Driver Rajesh Kumar updated location to Mumbai Central Logistics Hub', type: 'info' },
+      { timestamp: '02:15 PM', vehicleId: 'TRK-105', event: 'Driver Priya Patel departed Hyderabad Outer Ring Highway', type: 'success' },
+      { timestamp: '01:50 PM', vehicleId: 'TRK-106', event: 'Low tire pressure warning detected at Kolkata Dock Complex', type: 'warning' },
+      { timestamp: '01:20 PM', vehicleId: 'TRK-103', event: 'Arrived at Bengaluru Electronic City Gate', type: 'success' }
+    ];
+    await Log.insertMany(seedLogs);
+    console.log('✅ Seeding logs completed.');
 
     // 4. Seed Reports
-    const reportCount = await Report.countDocuments();
-    if (reportCount === 0) {
-      console.log('🌱 Seeding default report data...');
-      await Report.insertMany(MOCK_REPORT_DATA);
-      console.log('✅ Seeding reports completed.');
-    }
+    await Report.deleteMany({});
+    console.log('🌱 Seeding Indian Fleet report data...');
+    await Report.insertMany(MOCK_REPORT_DATA);
+    console.log('✅ Seeding reports completed.');
   } catch (error) {
     console.error('❌ Error seeding database:', error.message);
   }
@@ -307,7 +393,7 @@ app.get('/api/vehicles', async (req, res) => {
 
 app.put('/api/vehicles/:id/status', async (req, res) => {
   const { id } = req.params;
-  const { status, speed, fuel, telemetry, alerts } = req.body;
+  const { status, speed, fuel, location, telemetry, alerts, driver } = req.body;
 
   try {
     const vehicle = await Vehicle.findOne({ id });
@@ -318,6 +404,8 @@ app.put('/api/vehicles/:id/status', async (req, res) => {
     if (status !== undefined) vehicle.status = status;
     if (speed !== undefined) vehicle.speed = speed;
     if (fuel !== undefined) vehicle.fuel = fuel;
+    if (location !== undefined) vehicle.location = location;
+    if (driver !== undefined) vehicle.driver = driver;
     if (telemetry !== undefined) {
       vehicle.telemetry = {
         ...vehicle.telemetry,

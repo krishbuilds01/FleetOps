@@ -17,6 +17,23 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 
+const getDriverNameFromEmail = (email) => {
+  if (!email) return "Rajesh Kumar";
+  const clean = email.toLowerCase().trim();
+  if (clean === "driver@fleetops.com" || clean.startsWith("rajesh")) return "Rajesh Kumar";
+  if (clean.startsWith("amit")) return "Amit Sharma";
+  if (clean.startsWith("suresh")) return "Suresh Verma";
+  if (clean.startsWith("vikram")) return "Vikram Singh";
+  if (clean.startsWith("priya")) return "Priya Patel";
+  if (clean.startsWith("anil")) return "Anil Yadav";
+  if (clean.startsWith("ramesh")) return "Ramesh Gupta";
+  if (clean.startsWith("deepak")) return "Deepak Reddy";
+  
+  const prefix = clean.split("@")[0];
+  const parts = prefix.split(/[._-]/);
+  return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+};
+
 export default function DriverDashboard({
   vehicles,
   setVehicles,
@@ -24,10 +41,7 @@ export default function DriverDashboard({
   user,
 }) {
   const driverEmail = user?.email || "driver@fleetops.com";
-  const [driverName, setDriverName] = useState(() => {
-    const emailPrefix = user?.email ? user.email.split("@")[0] : "Driver";
-    return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-  });
+  const [driverName, setDriverName] = useState(() => getDriverNameFromEmail(user?.email));
 
   const [activeShift, setActiveShift] = useState(false);
   const [shiftId, setShiftId] = useState(null);
@@ -41,6 +55,134 @@ export default function DriverDashboard({
   const [incidentLocation, setIncidentLocation] = useState("");
   const [incidentDesc, setIncidentDesc] = useState("");
   const [isSubmittingIncident, setIsSubmittingIncident] = useState(false);
+
+  const [driverLocationInput, setDriverLocationInput] = useState("");
+  const [driverFuelInput, setDriverFuelInput] = useState("");
+  const [driverPressureInput, setDriverPressureInput] = useState("");
+  const [driverCargoInput, setDriverCargoInput] = useState("");
+
+  const handleUpdateLocation = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedVehicleId) {
+      showToast("Please select a vehicle first.", "warning");
+      return;
+    }
+    if (!driverLocationInput.trim()) {
+      showToast("Please enter a location.", "warning");
+      return;
+    }
+
+    const newLoc = driverLocationInput.trim();
+    try {
+      await api.updateVehicleStatus(selectedVehicleId, { location: newLoc });
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === selectedVehicleId ? { ...v, location: newLoc } : v))
+      );
+      showToast(`Vehicle location updated to: ${newLoc}`, "success");
+      setDriverLocationInput("");
+    } catch (err) {
+      console.warn("Backend offline, updating location locally:", err.message);
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === selectedVehicleId ? { ...v, location: newLoc } : v))
+      );
+      showToast(`Location updated to: ${newLoc}`, "success");
+      setDriverLocationInput("");
+    }
+  };
+
+  const handleUpdateFuelAndPressure = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedVehicleId) {
+      showToast("Please select a vehicle first.", "warning");
+      return;
+    }
+    if (!driverFuelInput && !driverPressureInput.trim() && !driverCargoInput.trim()) {
+      showToast("Please enter fuel percentage, tire pressure, or cargo load weight.", "warning");
+      return;
+    }
+
+    const updatedData = {};
+    if (driverFuelInput !== "") {
+      const fuelNum = Math.max(0, Math.min(100, Number(driverFuelInput)));
+      updatedData.fuel = fuelNum;
+    }
+
+    const currentPressure = currentVehicle?.telemetry?.pressure || "110 psi";
+    const newPressure = driverPressureInput.trim() 
+      ? (driverPressureInput.trim().toLowerCase().includes("psi") ? driverPressureInput.trim() : `${driverPressureInput.trim()} psi`) 
+      : currentPressure;
+
+    const currentCargo = currentVehicle?.telemetry?.load || "General Freight (12 tons)";
+    const newCargo = driverCargoInput.trim() ? driverCargoInput.trim() : currentCargo;
+
+    updatedData.telemetry = {
+      ...(currentVehicle?.telemetry || {}),
+      pressure: newPressure,
+      load: newCargo
+    };
+
+    try {
+      await api.updateVehicleStatus(selectedVehicleId, updatedData);
+      setVehicles((prev) =>
+        prev.map((v) => {
+          if (v.id === selectedVehicleId) {
+            return {
+              ...v,
+              fuel: updatedData.fuel !== undefined ? updatedData.fuel : v.fuel,
+              telemetry: {
+                ...v.telemetry,
+                pressure: newPressure,
+                load: newCargo
+              }
+            };
+          }
+          return v;
+        })
+      );
+      if (liveTelemetry) {
+        setLiveTelemetry((prev) => ({
+          ...prev,
+          fuel: updatedData.fuel !== undefined ? updatedData.fuel : prev.fuel,
+          pressure: newPressure,
+          load: newCargo
+        }));
+      }
+      showToast("Fuel, Tire Pressure & Cargo Load saved to database!", "success");
+      setDriverFuelInput("");
+      setDriverPressureInput("");
+      setDriverCargoInput("");
+    } catch (err) {
+      console.warn("Backend offline, updating telematics locally:", err.message);
+      setVehicles((prev) =>
+        prev.map((v) => {
+          if (v.id === selectedVehicleId) {
+            return {
+              ...v,
+              fuel: updatedData.fuel !== undefined ? updatedData.fuel : v.fuel,
+              telemetry: {
+                ...v.telemetry,
+                pressure: newPressure,
+                load: newCargo
+              }
+            };
+          }
+          return v;
+        })
+      );
+      if (liveTelemetry) {
+        setLiveTelemetry((prev) => ({
+          ...prev,
+          fuel: updatedData.fuel !== undefined ? updatedData.fuel : prev.fuel,
+          pressure: newPressure,
+          load: newCargo
+        }));
+      }
+      showToast("Fuel, Tire Pressure & Cargo Load updated locally!", "success");
+      setDriverFuelInput("");
+      setDriverPressureInput("");
+      setDriverCargoInput("");
+    }
+  };
 
   const [localShifts, setLocalShifts] = useState([]);
   const [localIncidents, setLocalIncidents] = useState([]);
@@ -57,9 +199,37 @@ export default function DriverDashboard({
     return vehicles.find((v) => v.id === selectedVehicleId) || null;
   }, [vehicles, selectedVehicleId]);
 
+  const myAssignedVehicles = useMemo(() => {
+    const cleanEmail = driverEmail.toLowerCase();
+    const cleanName = driverName.toLowerCase();
+    const cleanPrefix = cleanEmail.split("@")[0];
+    return vehicles.filter((v) => {
+      if (!v.driver) return false;
+      const d = v.driver.toLowerCase();
+      if (cleanEmail === "driver@fleetops.com" && (d === "rajesh kumar" || d === "driver@fleetops.com")) {
+        return true;
+      }
+      return (
+        d === cleanEmail ||
+        d === cleanName ||
+        d.includes(cleanName) ||
+        cleanEmail.includes(d) ||
+        (cleanPrefix.length > 2 && d.includes(cleanPrefix))
+      );
+    });
+  }, [vehicles, driverEmail, driverName]);
+
   const availableVehicles = useMemo(() => {
-    return vehicles.filter((v) => v.status === "Idle");
-  }, [vehicles]);
+    return myAssignedVehicles.length > 0
+      ? myAssignedVehicles
+      : vehicles.filter((v) => v.status === "Idle");
+  }, [myAssignedVehicles, vehicles]);
+
+  useEffect(() => {
+    if (myAssignedVehicles.length > 0 && !selectedVehicleId) {
+      setSelectedVehicleId(myAssignedVehicles[0].id);
+    }
+  }, [myAssignedVehicles, selectedVehicleId]);
 
   const formatTime = (totalSeconds) => {
     const hrs = Math.floor(totalSeconds / 3600);
@@ -93,96 +263,23 @@ export default function DriverDashboard({
   }, [activeShift]);
 
   useEffect(() => {
-    if (!activeShift || !selectedVehicleId) return;
-
-    const initialVehicle = vehiclesRef.current.find((v) => v.id === selectedVehicleId);
-    if (initialVehicle) {
-      setLiveTelemetry({
-        speed: initialVehicle.speed || 55,
-        fuel: initialVehicle.fuel || 80,
-        temp: initialVehicle.telemetry?.temp || 180,
-        pressure: initialVehicle.telemetry?.pressure || "95 psi",
-        location: initialVehicle.location || "Terminal Depot",
-      });
+    if (!activeShift || !selectedVehicleId) {
+      setLiveTelemetry(null);
+      return;
     }
 
-    const interval = setInterval(async () => {
-      const currentVal = telemetryRef.current;
-      if (!currentVal) return;
-
-      const latestVehicles = vehiclesRef.current;
-      const latestVehicle = latestVehicles.find((v) => v.id === selectedVehicleId);
-      const currentStatus = latestVehicle?.status || "En Route";
-
-      let newSpeed = 0;
-      let newTemp = currentVal.temp;
-      
-      if (currentStatus === "En Route") {
-        const speedChange = Math.floor(Math.random() * 9) - 4;
-        newSpeed = Math.max(30, Math.min(75, currentVal.speed + speedChange));
-        if (newSpeed === 0) newSpeed = 55;
-
-        const tempDiff = Math.floor(Math.random() * 5) - 2;
-        newTemp = Math.max(160, Math.min(230, currentVal.temp + tempDiff));
-      } else {
-        newSpeed = 0;
-        if (currentVal.temp > 78) {
-          newTemp = Math.max(75, currentVal.temp - 2);
-        } else if (currentVal.temp < 72) {
-          newTemp = Math.min(75, currentVal.temp + 1);
-        }
-      }
-
-      const newFuel = Math.max(
-        1,
-        Math.round((currentVal.fuel - (currentStatus === "En Route" ? 0.2 : 0.02)) * 10) / 10,
-      );
-
-      const updatedTelemetry = {
-        speed: newSpeed,
-        fuel: Math.floor(newFuel),
-        temp: newTemp,
-        pressure: currentVal.pressure,
-        location: currentVal.location,
-      };
-
-      setLiveTelemetry(updatedTelemetry);
-
-      try {
-        await api.updateVehicleStatus(selectedVehicleId, {
-          status: currentStatus,
-          speed: newSpeed,
-          fuel: Math.floor(newFuel),
-          telemetry: {
-            temp: newTemp,
-            load: latestVehicle?.telemetry?.load || "General Freight",
-            pressure: currentVal.pressure,
-          },
-        });
-      } catch (err) {
-        console.warn("Backend sync failed, updating local state:", err.message);
-        setVehicles((prev) =>
-          prev.map((v) => {
-            if (v.id === selectedVehicleId) {
-              return {
-                ...v,
-                status: currentStatus,
-                speed: newSpeed,
-                fuel: Math.floor(newFuel),
-                telemetry: {
-                  ...v.telemetry,
-                  temp: newTemp,
-                },
-              };
-            }
-            return v;
-          }),
-        );
-      }
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [activeShift, selectedVehicleId, setVehicles]);
+    const targetVehicle = vehicles.find((v) => v.id === selectedVehicleId);
+    if (targetVehicle) {
+      setLiveTelemetry({
+        speed: targetVehicle.speed || 0,
+        fuel: targetVehicle.fuel || 80,
+        temp: targetVehicle.telemetry?.temp || 180,
+        pressure: targetVehicle.telemetry?.pressure || "110 psi",
+        location: targetVehicle.location || "Depot Base",
+        load: targetVehicle.telemetry?.load || "General Freight (12 tons)",
+      });
+    }
+  }, [activeShift, selectedVehicleId, vehicles]);
 
   const handleStartShift = async () => {
     if (!selectedVehicleId) {
@@ -511,7 +608,7 @@ export default function DriverDashboard({
             </p>
           </div>
 
-          <div className="text-right text-xs text-slate-550 font-bold bg-white border border-slate-200 px-4 py-2.5 rounded-xl shadow-xs self-start md:self-auto">
+          <div className="text-right text-xs font-bold bg-white border border-slate-200 px-4 py-2.5 rounded-xl shadow-xs self-start md:self-auto">
             <span className="text-slate-400 font-normal">OPERATOR: </span>
             <span className="text-slate-900 font-extrabold mr-2">
               {driverName}
@@ -521,6 +618,8 @@ export default function DriverDashboard({
             </span>
           </div>
         </div>
+
+
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-5 space-y-6">
@@ -550,27 +649,45 @@ export default function DriverDashboard({
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="vehicle-select"
-                      className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2"
-                    >
-                      Assign Fleet Vehicle
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label
+                        htmlFor="vehicle-select"
+                        className="block text-xs font-bold text-slate-700 uppercase tracking-wide"
+                      >
+                        Assigned Fleet Vehicle
+                      </label>
+                      {myAssignedVehicles.length > 0 ? (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          ✓ Assigned by Manager
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          Unassigned
+                        </span>
+                      )}
+                    </div>
+
                     <select
                       id="vehicle-select"
                       value={selectedVehicleId}
                       onChange={(e) => setSelectedVehicleId(e.target.value)}
-                      className="w-full text-sm text-slate-950 border border-slate-300 rounded-xl px-3.5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-slate-50/50 cursor-pointer"
+                      className="w-full text-sm text-slate-950 border border-slate-300 rounded-xl px-3.5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-slate-50/50 cursor-pointer font-semibold"
                     >
                       <option value="">
-                        -- Choose an Available Vehicle --
+                        -- Select Assigned Vehicle --
                       </option>
                       {availableVehicles.map((v) => (
                         <option key={v.id} value={v.id}>
-                          {v.id} - {v.type} ({v.location})
+                          {v.id} - {v.type} ({v.driver ? `Driver: ${v.driver}` : 'Unassigned'})
                         </option>
                       ))}
                     </select>
+
+                    {myAssignedVehicles.length === 0 && (
+                      <p className="text-[11px] text-slate-500 font-medium mt-1.5 leading-tight">
+                        ℹ️ Manager can assign a vehicle to your account ({driverEmail}) from the Manager Dashboard.
+                      </p>
+                    )}
                   </div>
 
                   {currentVehicle && (
@@ -680,6 +797,32 @@ export default function DriverDashboard({
                     </div>
                   </div>
 
+                  {/* Driver Location Update Card */}
+                  <div className="space-y-2 pt-3 border-t border-slate-100">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                      <span>Update Current Location</span>
+                      <span className="text-[10px] text-blue-600 font-normal">
+                        Active: <strong>{currentVehicle?.location || "Depot Base"}</strong>
+                      </span>
+                    </label>
+                    <form onSubmit={handleUpdateLocation} className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. Sector 4, Downtown Depot, Chicago IL"
+                        value={driverLocationInput}
+                        onChange={(e) => setDriverLocationInput(e.target.value)}
+                        className="flex-grow text-xs text-slate-900 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50"
+                      />
+                      <button
+                        type="submit"
+                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shrink-0 transition-colors shadow-xs cursor-pointer flex items-center gap-1"
+                      >
+                        <MapPin className="w-3.5 h-3.5" />
+                        Update Location
+                      </button>
+                    </form>
+                  </div>
+
                   <div className="flex flex-col gap-2 border-t border-slate-100 pt-5">
                     <button
                       onClick={() => setIsReporting(true)}
@@ -740,31 +883,18 @@ export default function DriverDashboard({
               <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-6 space-y-6">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
                   <Activity className="w-5 h-5 text-blue-600" />
-                  Live Cabin Telematics
+                  Vehicle Diagnostics & Telematics
                 </h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-4 flex items-center gap-4">
-                    <div className="bg-blue-100/60 p-3 rounded-lg text-blue-600">
-                      <Gauge className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wide block">
-                        Current Velocity
-                      </span>
-                      <strong className="text-xl font-black text-slate-900">
-                        {liveTelemetry.speed} mph
-                      </strong>
-                    </div>
-                  </div>
-
+                  {/* Remaining Fuel */}
                   <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-4 flex items-center gap-4">
                     <div className="bg-emerald-100/60 p-3 rounded-lg text-emerald-600">
                       <Battery className="w-6 h-6" />
                     </div>
                     <div className="flex-grow">
                       <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wide block">
-                        Fuel / Battery Status
+                        Remaining Fuel
                       </span>
                       <div className="flex items-center gap-2 mt-0.5">
                         <strong className="text-xl font-black text-slate-900">
@@ -784,90 +914,95 @@ export default function DriverDashboard({
                     </div>
                   </div>
 
+                  {/* Tire Pressure */}
                   <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-4 flex items-center gap-4">
-                    <div className="bg-slate-100 p-3 rounded-lg text-slate-600">
-                      <svg
-                        className="w-6 h-6"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                        />
-                      </svg>
+                    <div className="bg-blue-100/60 p-3 rounded-lg text-blue-600">
+                      <Gauge className="w-6 h-6" />
                     </div>
                     <div>
                       <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wide block">
-                        Engine Temperature
+                        Tire Pressure
                       </span>
-                      <strong
-                        className={`text-xl font-black ${liveTelemetry.temp > 215 ? "text-red-650" : "text-slate-900"}`}
-                      >
-                        {liveTelemetry.temp} °F
+                      <strong className="text-xl font-black text-slate-900">
+                        {liveTelemetry.pressure || currentVehicle?.telemetry?.pressure || "110 psi"}
                       </strong>
                     </div>
                   </div>
 
-                  <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-4 flex items-center gap-4">
+                  {/* Cargo Load */}
+                  <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-4 flex items-center gap-4 sm:col-span-2">
                     <div className="bg-slate-100 p-3 rounded-lg text-slate-600">
                       <Truck className="w-6 h-6" />
                     </div>
                     <div>
                       <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wide block">
-                        Payload Cargo Load
+                        Cargo Load Weight
                       </span>
                       <strong className="text-sm font-bold text-slate-800">
-                        {currentVehicle?.telemetry?.load || "General Freight"}
+                        {currentVehicle?.telemetry?.load || "General Freight (12 tons)"}
                       </strong>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Live Route Telematics Map
+                {/* Driver Update Form for Telematics (Fuel, Tire Pressure, Cargo Load) */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider border-b border-slate-200 pb-2">
+                    Driver Telematics Update Form
                   </h3>
-                  <div className="relative h-44 bg-slate-900 border border-slate-950 rounded-2xl overflow-hidden flex items-center justify-center shadow-inner group">
-                    <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-40"></div>
 
-                    <svg
-                      className="w-full h-full absolute inset-0 text-slate-700/40"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M 30,50 Q 150,20 200,90 T 380,120"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeDasharray="5, 5"
+                  <form onSubmit={handleUpdateFuelAndPressure} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Fuel Level (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          placeholder={`Current: ${liveTelemetry.fuel}%`}
+                          value={driverFuelInput}
+                          onChange={(e) => setDriverFuelInput(e.target.value)}
+                          className="w-full text-xs text-slate-900 border border-slate-300 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Tire Pressure (psi)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={`Current: ${liveTelemetry.pressure || '110 psi'}`}
+                          value={driverPressureInput}
+                          onChange={(e) => setDriverPressureInput(e.target.value)}
+                          className="w-full text-xs text-slate-900 border border-slate-300 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+                        Cargo Load Weight / Description
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={`Current: ${liveTelemetry.load || currentVehicle?.telemetry?.load || 'Produce (22 tons)'}`}
+                        value={driverCargoInput}
+                        onChange={(e) => setDriverCargoInput(e.target.value)}
+                        className="w-full text-xs text-slate-900 border border-slate-300 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
-                      <circle cx="200" cy="90" r="4" fill="#3b82f6" />
-                      <circle cx="350" cy="60" r="4" fill="#f59e0b" />
-                    </svg>
-
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                      <span className="relative flex h-5 w-5 mx-auto">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 border-2 border-white shadow-md items-center justify-center">
-                          <Truck className="w-3 h-3 text-white" />
-                        </span>
-                      </span>
                     </div>
 
-                    <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-slate-950/85 backdrop-blur-xs border border-slate-800 rounded-lg p-2 flex items-center justify-between text-[10px] text-slate-350 font-semibold font-sans">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                        Loc: {liveTelemetry.location}
-                      </span>
-                      <span>
-                        Dest: {currentVehicle?.destination || "Depot"}
-                      </span>
-                    </div>
-                  </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Battery className="w-4 h-4" />
+                      Save Fuel, Pressure & Cargo Updates
+                    </button>
+                  </form>
                 </div>
               </div>
             ) : (

@@ -84,37 +84,39 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
     }
   };
 
-  // Customer Inquiries States
-  const [inquiries, setInquiries] = useState([]);
-  const [inquiriesLoading, setInquiriesLoading] = useState(false);
-
-  const fetchInquiries = useCallback(async () => {
-    if (!user || (user.role !== 'admin' && user.role !== 'manager')) return;
-    setInquiriesLoading(true);
-    try {
-      const data = await api.getQueries(user.role);
-      setInquiries(data);
-    } catch (err) {
-      console.warn('Failed to load inquiries:', err.message);
-      showToast('Failed to load customer inquiries.', 'warning');
-    } finally {
-      setInquiriesLoading(false);
+  const handleAssignDriver = async (vehicleId, driverEmailOrName) => {
+    if (!driverEmailOrName || !driverEmailOrName.trim()) {
+      showToast("Please select or enter a driver email/name.", "warning");
+      return;
     }
-  }, [user]);
-
-  useEffect(() => {
-    fetchInquiries();
-  }, [fetchInquiries]);
-
-  const handleMarkAsResolved = async (id) => {
+    const assignedDriver = driverEmailOrName.trim();
     try {
-      await api.deleteQuery(id, user.role);
-      showToast('Query marked as resolved and removed.', 'success');
-      fetchInquiries();
+      await api.updateVehicleStatus(vehicleId, { driver: assignedDriver });
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === vehicleId ? { ...v, driver: assignedDriver } : v))
+      );
+      showToast(`Vehicle ${vehicleId} assigned to driver: ${assignedDriver}`, "success");
+      setLogs((prev) => [
+        {
+          id: Date.now(),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          vehicleId: vehicleId,
+          event: `Manager assigned vehicle to ${assignedDriver}`,
+          type: "success",
+        },
+        ...prev.slice(0, 19),
+      ]);
     } catch (err) {
-      showToast(err.message || 'Failed to update query status.', 'warning');
+      console.warn("Backend offline, assigning driver locally:", err.message);
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === vehicleId ? { ...v, driver: assignedDriver } : v))
+      );
+      showToast(`Vehicle ${vehicleId} assigned to ${assignedDriver} (locally)`, "success");
     }
   };
+
+  // Driver registration and management
+  const handleRegisterDriverSubmit = () => {};
 
 
   
@@ -363,41 +365,9 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
             </p>
           </div>
 
-          {}
-          <div className="flex items-center bg-white border border-slate-200 px-4 py-2.5 rounded-xl shadow-xs self-start md:self-auto gap-4">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isSimulating ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
-              <div>
-                <p className="text-xs font-bold text-slate-800 uppercase tracking-wide">Live Telemetry Simulation</p>
-                <p className="text-[10px] text-slate-400 font-medium">{isSimulating ? 'Generating dynamic telemetry' : 'Simulation paused'}</p>
-              </div>
-            </div>
-            
-            <button
-              onClick={() => {
-                setIsSimulating(!isSimulating);
-                showToast(isSimulating ? 'Live telemetry simulator stopped.' : 'Live telemetry simulator activated.', isSimulating ? 'info' : 'success');
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                isSimulating 
-                  ? 'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200' 
-                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
-              }`}
-            >
-              {isSimulating ? (
-                <>
-                  <Square className="w-3.5 h-3.5 fill-red-700" />
-                  Stop Live
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-emerald-700" />
-                  Start Live
-                </>
-              )}
-            </button>
-          </div>
         </div>
+
+
 
         {(user?.role === 'admin' || user?.role === 'manager') && (
           <div className="flex border-b border-slate-200 mb-6 gap-2 select-none">
@@ -423,21 +393,6 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
                 Driver Management
               </button>
             )}
-            <button
-              onClick={() => setActiveTab('inquiries')}
-              className={`pb-3 text-sm font-bold border-b-2 px-4 transition-all duration-205 cursor-pointer focus:outline-none flex items-center ${
-                activeTab === 'inquiries'
-                  ? 'border-blue-600 text-blue-600 font-extrabold'
-                  : 'border-transparent text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Customer Inquiries
-              {inquiries.length > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 text-[9px] font-black bg-blue-100 text-blue-800 rounded-full border border-blue-200 flex items-center justify-center min-w-[16px] h-4 leading-none">
-                  {inquiries.length}
-                </span>
-              )}
-            </button>
           </div>
         )}
 
@@ -574,80 +529,6 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
               </div>
             </div>
           </div>
-        ) : activeTab === 'inquiries' ? (
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col animate-in fade-in duration-200 text-left">
-            <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-blue-600" />
-                  Landing Page Customer Inquiries
-                </h2>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Direct requests submitted by potential clients from the landing page.
-                </p>
-              </div>
-              <button
-                onClick={fetchInquiries}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg px-2.5 py-1.5 hover:bg-slate-50 transition-all cursor-pointer bg-white"
-              >
-                Refresh Messages
-              </button>
-            </div>
-
-            <div className="p-6">
-              {inquiriesLoading ? (
-                <div className="py-20 text-center text-slate-500 text-sm font-medium">
-                  <span className="inline-block animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></span>
-                  Loading customer inquiries...
-                </div>
-              ) : inquiries.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {inquiries.map((inq) => (
-                    <div key={inq._id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:shadow-md hover:border-slate-300 transition-all">
-                      <div className="space-y-3.5">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-sm text-slate-900">{inq.name}</h3>
-                            <a href={`mailto:${inq.email}`} className="text-xs text-blue-600 hover:underline font-semibold block mt-0.5">
-                              {inq.email}
-                            </a>
-                          </div>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                            Fleet Size: {inq.fleetSize}
-                          </span>
-                        </div>
-
-                        <div className="bg-white border border-slate-200/50 rounded-xl p-3.5 text-xs text-slate-700 font-medium leading-relaxed italic">
-                          "{inq.message}"
-                        </div>
-                      </div>
-
-                      <div className="border-t border-slate-200/60 pt-4 mt-4 flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400 font-bold">
-                          Submitted {new Date(inq.createdAt || Date.now()).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                        <button
-                          onClick={() => handleMarkAsResolved(inq._id)}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-650 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600 rounded-lg px-2.5 py-1.5 transition-all cursor-pointer bg-white"
-                        >
-                          Mark as Resolved
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-20 text-center text-slate-400 text-sm font-medium">
-                  No open customer inquiries. All caught up!
-                </div>
-              )}
-            </div>
-          </div>
         ) : (
           <>
             {}
@@ -781,8 +662,7 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
                         <th className="py-3.5 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Vehicle ID</th>
                         <th className="py-3.5 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Operator / Type</th>
                         <th className="py-3.5 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                        <th className="py-3.5 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Fuel / Battery</th>
-                        <th className="py-3.5 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Speed / Location</th>
+                        <th className="py-3.5 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Current Location</th>
                         <th className="py-3.5 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider"></th>
                       </tr>
                     </thead>
@@ -798,7 +678,7 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
                                 isSelected ? 'bg-blue-50/40 hover:bg-blue-50/50' : ''
                               }`}
                             >
-                              {}
+                              {/* Vehicle ID */}
                               <td className="py-4 px-5 align-middle">
                                 <span className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors">
                                   {vehicle.id}
@@ -810,13 +690,13 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
                                 )}
                               </td>
 
-                              {}
+                              {/* Operator / Type */}
                               <td className="py-4 px-5 align-middle">
                                 <div className="font-semibold text-sm text-slate-800">{vehicle.driver}</div>
                                 <div className="text-xs text-slate-400 font-medium">{vehicle.type}</div>
                               </td>
 
-                              {}
+                              {/* Status */}
                               <td className="py-4 px-5 align-middle">
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${
                                   vehicle.status === 'En Route' 
@@ -836,43 +716,15 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
                                 </span>
                               </td>
 
-                              {}
+                              {/* Current Location (Updated by Driver) */}
                               <td className="py-4 px-5 align-middle">
-                                <div className="flex items-center gap-2">
-                                  <Battery className={`w-4.5 h-4.5 shrink-0 ${
-                                    vehicle.fuel < 20 
-                                      ? 'text-red-500 animate-pulse' 
-                                      : vehicle.fuel < 50
-                                        ? 'text-amber-500'
-                                        : 'text-emerald-500'
-                                  }`} />
-                                  <div>
-                                    <span className="font-semibold text-sm text-slate-800">{vehicle.fuel}%</span>
-                                    <div className="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1 border border-slate-200/20">
-                                      <div 
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                          vehicle.fuel < 20 ? 'bg-red-500' : vehicle.fuel < 50 ? 'bg-amber-500' : 'bg-emerald-500'
-                                        }`}
-                                        style={{ width: `${vehicle.fuel}%` }}
-                                      />
-                                    </div>
-                                  </div>
+                                <div className="flex items-center gap-1.5 text-slate-800 font-bold text-sm">
+                                  <MapPin className="w-4 h-4 text-blue-600 shrink-0" />
+                                  {vehicle.location || 'Depot Base'}
                                 </div>
                               </td>
 
-                              {}
-                              <td className="py-4 px-5 align-middle">
-                                <div className="flex items-center gap-1.5 text-slate-700 font-semibold text-sm">
-                                  <Gauge className="w-3.5 h-3.5 text-slate-400" />
-                                  {vehicle.speed > 0 ? `${vehicle.speed} mph` : 'Stopped'}
-                                </div>
-                                <div className="text-xs text-slate-400 font-medium flex items-center gap-0.5 mt-0.5">
-                                  <MapPin className="w-3 h-3 shrink-0" />
-                                  {vehicle.location}
-                                </div>
-                              </td>
-
-                              {}
+                              {/* Navigation Arrow */}
                               <td className="py-4 px-5 text-right align-middle">
                                 <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                               </td>
@@ -1007,17 +859,51 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
             {}
             <div className="flex-grow overflow-y-auto p-6 space-y-6">
               
-              {}
+              {/* Assigned Driver Card & Assignment Selector */}
               <div className="bg-slate-50 border border-slate-200/60 p-4.5 rounded-2xl space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned Driver</span>
-                    <h4 className="text-base font-bold text-slate-900">{selectedVehicle.driver}</h4>
+                    <h4 className="text-base font-bold text-slate-900">{selectedVehicle.driver || "Unassigned"}</h4>
                   </div>
                   <div className="bg-white border border-slate-200 p-2 rounded-xl text-slate-600 shadow-2xs">
                     <Users className="w-4 h-4" />
                   </div>
                 </div>
+
+                {/* Manager Driver Re-assignment */}
+                <div className="pt-3 border-t border-slate-200/60 space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    Assign to Driver:
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAssignDriver(selectedVehicle.id, e.target.value);
+                        }
+                      }}
+                      defaultValue=""
+                      className="flex-grow text-xs border border-slate-300 rounded-xl px-2.5 py-2 bg-white text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="" disabled>-- Assign Driver --</option>
+                      {drivers.map((drv) => (
+                        <option key={drv.email} value={drv.email}>
+                          {drv.email}
+                        </option>
+                      ))}
+                      <option value="rajesh.kumar@fleetops.com">Rajesh Kumar (rajesh.kumar@fleetops.com)</option>
+                      <option value="amit.sharma@fleetops.com">Amit Sharma (amit.sharma@fleetops.com)</option>
+                      <option value="suresh.verma@fleetops.com">Suresh Verma (suresh.verma@fleetops.com)</option>
+                      <option value="vikram.singh@fleetops.com">Vikram Singh (vikram.singh@fleetops.com)</option>
+                      <option value="priya.patel@fleetops.com">Priya Patel (priya.patel@fleetops.com)</option>
+                      <option value="anil.yadav@fleetops.com">Anil Yadav (anil.yadav@fleetops.com)</option>
+                      <option value="ramesh.gupta@fleetops.com">Ramesh Gupta (ramesh.gupta@fleetops.com)</option>
+                      <option value="deepak.reddy@fleetops.com">Deepak Reddy (deepak.reddy@fleetops.com)</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="border-t border-slate-200/60 pt-3 flex justify-between text-xs text-slate-500 font-semibold">
                   <span>Class type:</span>
                   <span className="text-slate-800">{selectedVehicle.type}</span>
@@ -1067,13 +953,12 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
                 </div>
               </div>
 
-              {}
+              {/* Engine Diagnostic Telematics */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Engine Diagnostic Telematics</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Vehicle Diagnostic Telematics</h4>
                 
                 <div className="grid grid-cols-2 gap-3.5">
-                  
-                  {}
+                  {/* Fuel Status */}
                   <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-3.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Remaining Fuel</span>
                     <span className="text-lg font-black text-slate-900 mt-1 block flex items-center gap-1.5">
@@ -1082,79 +967,23 @@ export default function ManagerDashboard({ vehicles, setVehicles, logs, setLogs,
                     </span>
                   </div>
 
-                  {}
-                  <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-3.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Speed</span>
-                    <span className="text-lg font-black text-slate-900 mt-1 block flex items-center gap-1.5">
-                      <Gauge className="w-5 h-5 text-blue-500" />
-                      {selectedVehicle.speed} mph
-                    </span>
-                  </div>
-
-                  {}
-                  <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-3.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Coolant Temp</span>
-                    <span className={`text-base font-black mt-1 block ${selectedVehicle.telemetry.temp > 210 ? 'text-red-600' : 'text-slate-900'}`}>
-                      {selectedVehicle.telemetry.temp}°F
-                    </span>
-                  </div>
-
-                  {}
+                  {/* Tire Pressure */}
                   <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-3.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tire Pressure</span>
                     <span className="text-base font-black text-slate-900 mt-1 block">
-                      {selectedVehicle.telemetry.pressure}
+                      {selectedVehicle.telemetry?.pressure || '110 psi'}
                     </span>
                   </div>
-
                 </div>
 
-                {}
+                {/* Cargo Load Weight */}
                 <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-3.5">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cargo Load Weight</span>
                   <span className="text-sm font-bold text-slate-900 mt-1 block">
-                    {selectedVehicle.telemetry.load}
+                    {selectedVehicle.telemetry?.load || 'General Freight (12 tons)'}
                   </span>
                 </div>
 
-              </div>
-
-              {}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Telemetry Routing Map</h4>
-                <div className="relative h-44 bg-slate-900 border border-slate-950 rounded-2xl overflow-hidden flex items-center justify-center shadow-inner group">
-                  {}
-                  <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-40"></div>
-                  
-                  {}
-                  <svg className="w-full h-full absolute inset-0 text-slate-700/40" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M 30,50 Q 150,20 200,90 T 380,120" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="5, 5" />
-                    <path d="M 50,150 C 120,80 280,160 350,60" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                    <circle cx="200" cy="90" r="4" fill="#3b82f6" />
-                    <circle cx="350" cy="60" r="4" fill="#f59e0b" />
-                  </svg>
-
-                  {}
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                    <span className="relative flex h-5 w-5 mx-auto">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 border-2 border-white shadow-md items-center justify-center">
-                        <Truck className="w-3 h-3 text-white" />
-                      </span>
-                    </span>
-                  </div>
-
-                  {}
-                  <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-slate-950/80 backdrop-blur-xs border border-slate-800 rounded-lg p-2 flex items-center justify-between text-[10px] text-slate-300 font-semibold">
-                    <span className="flex items-center gap-1 text-slate-400">
-                      <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                      Loc: {selectedVehicle.location}
-                    </span>
-                    <span className="text-right text-slate-400">
-                      Dest: {selectedVehicle.destination}
-                    </span>
-                  </div>
-                </div>
               </div>
 
             </div>

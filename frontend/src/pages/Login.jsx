@@ -3,20 +3,19 @@ import { Eye, EyeOff, Lock, Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { api } from '../api';
 
 
-const DEMO_ADMIN = {
-  email: ['admin', 'fleetops.com'].join('@'),
-  password: ['admin', '123'].join(''),
-};
-
-const DEMO_MANAGER = {
-  email: import.meta.env.VITE_DEMO_EMAIL || ['manager', 'fleetops.com'].join('@'),
-  password: import.meta.env.VITE_DEMO_PASSWORD || ['manager', '123'].join(''),
-};
-
-const DEMO_DRIVER = {
-  email: ['driver', 'fleetops.com'].join('@'),
-  password: ['driver', '123'].join(''),
-};
+const REGISTERED_USERS = [
+  { email: 'admin@fleetops.com', password: 'admin123', role: 'admin' },
+  { email: 'manager@fleetops.com', password: 'manager123', role: 'manager' },
+  { email: 'driver@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'rajesh.kumar@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'amit.sharma@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'suresh.verma@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'vikram.singh@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'priya.patel@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'anil.yadav@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'ramesh.gupta@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'deepak.reddy@fleetops.com', password: 'driver123', role: 'driver' }
+];
 
 export default function Login({ onNavigate, onLogin }) {
   const [email, setEmail] = useState('');
@@ -31,7 +30,6 @@ export default function Login({ onNavigate, onLogin }) {
     e.preventDefault();
     setError('');
 
-    
     if (!email || !password) {
       setError('Please fill in all fields.');
       return;
@@ -58,38 +56,22 @@ export default function Login({ onNavigate, onLogin }) {
         }, 1000);
       } catch (err) {
         setIsLoading(false);
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const emailClean = email.toLowerCase().trim();
+        const matched = REGISTERED_USERS.find(
+          (u) => u.email.toLowerCase() === emailClean && u.password === password
+        );
 
-        // If not localhost or if the backend explicitly rejected credentials (401), show error directly.
-        if (!isLocalhost || err.message === 'Invalid credentials. Access Denied.') {
-          setError(err.message || 'Authentication failed. Please check your credentials.');
-          return;
-        }
-
-        console.warn('Backend connection failed, trying demo offline credentials: ', err.message);
-        const emailLower = email.toLowerCase();
-        const isAdmin = emailLower === DEMO_ADMIN.email;
-        const isManager = emailLower === DEMO_MANAGER.email;
-        const isDriver = emailLower === DEMO_DRIVER.email;
-
-        if (
-          (isAdmin && password === DEMO_ADMIN.password) ||
-          (isManager && password === DEMO_MANAGER.password) ||
-          (isDriver && password === DEMO_DRIVER.password)
-        ) {
+        if (matched) {
           setSuccess(true);
           setTimeout(() => {
-            let role = 'driver';
-            if (isAdmin) role = 'admin';
-            if (isManager) role = 'manager';
             if (onLogin) {
-              onLogin({ email, role });
+              onLogin({ email: matched.email, role: matched.role });
             } else {
               onNavigate('home');
             }
           }, 1000);
         } else {
-          setError('Invalid email or password.');
+          setError(err.message || 'Invalid email or password.');
         }
       }
     };
@@ -267,8 +249,8 @@ export default function Login({ onNavigate, onLogin }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setEmail(DEMO_ADMIN.email);
-                    setPassword(DEMO_ADMIN.password);
+                    setEmail('admin@fleetops.com');
+                    setPassword('admin123');
                   }}
                   className="w-full inline-flex items-center justify-between px-2 py-2.5 border border-purple-100 rounded-lg text-[10px] font-semibold text-purple-700 bg-purple-50/50 hover:bg-purple-55 transition-all cursor-pointer"
                 >
@@ -281,8 +263,8 @@ export default function Login({ onNavigate, onLogin }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setEmail(DEMO_MANAGER.email);
-                    setPassword(DEMO_MANAGER.password);
+                    setEmail('manager@fleetops.com');
+                    setPassword('manager123');
                   }}
                   className="w-full inline-flex items-center justify-between px-2 py-2.5 border border-blue-100 rounded-lg text-[10px] font-semibold text-blue-700 bg-blue-50/50 hover:bg-blue-55 transition-all cursor-pointer"
                 >
@@ -295,8 +277,8 @@ export default function Login({ onNavigate, onLogin }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setEmail(DEMO_DRIVER.email);
-                    setPassword(DEMO_DRIVER.password);
+                    setEmail('driver@fleetops.com');
+                    setPassword('driver123');
                   }}
                   className="w-full inline-flex items-center justify-between px-2 py-2.5 border border-amber-100 rounded-lg text-[10px] font-semibold text-amber-700 bg-amber-50/50 hover:bg-amber-55 transition-all cursor-pointer"
                 >

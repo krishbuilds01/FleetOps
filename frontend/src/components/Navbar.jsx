@@ -75,12 +75,6 @@ export default function Navbar({ onNavigate, currentView, user }) {
           >
             Why FleetOps
           </button>
-          <button 
-            onClick={() => handleScroll('contact')}
-            className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors focus:outline-none focus-visible:text-blue-600 cursor-pointer"
-          >
-            Contact
-          </button>
           {user && (user.role === 'manager' || user.role === 'admin') && (
             <>
               <button 

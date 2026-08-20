@@ -4,7 +4,15 @@ import User from './models/User.js';
 export let MOCK_USERS = [
   { email: 'admin@fleetops.com', password: 'admin123', role: 'admin' },
   { email: 'manager@fleetops.com', password: 'manager123', role: 'manager' },
-  { email: 'driver@fleetops.com', password: 'driver123', role: 'driver' }
+  { email: 'driver@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'rajesh.kumar@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'amit.sharma@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'suresh.verma@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'vikram.singh@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'priya.patel@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'anil.yadav@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'ramesh.gupta@fleetops.com', password: 'driver123', role: 'driver' },
+  { email: 'deepak.reddy@fleetops.com', password: 'driver123', role: 'driver' }
 ];
 
 export function addMockUser(email, password, role) {
@@ -44,43 +52,53 @@ export function verifyRole(allowedRoles) {
   };
 }
 
-// Authentication handler
+// Strict authentication handler
 export async function loginUser(req, res) {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Please provide email and password.' });
   }
 
-  // Fallback to in-memory user check if MongoDB is not configured
-  if (!process.env.MONGODB_URI) {
-    console.log('MongoDB not configured. Using in-memory user fallback.');
-    const user = MOCK_USERS.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials. Access Denied.' });
+  const cleanEmail = email.toLowerCase().trim();
+
+  // 1. Try checking MongoDB if connected
+  if (process.env.MONGODB_URI && mongoose.connection.readyState === 1) {
+    try {
+      const user = await User.findOne({ email: cleanEmail });
+      if (user && user.password === password) {
+        return res.json({
+          success: true,
+          user: {
+            email: user.email,
+            role: user.role
+          }
+        });
+      }
+      
+      // If user exists in DB but password is wrong, return 401
+      if (user && user.password !== password) {
+        return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+    } catch (err) {
+      console.warn('MongoDB user lookup error:', err.message);
     }
+  }
+
+  // 2. Check against strictly allowed registered MOCK_USERS
+  const mockUser = MOCK_USERS.find(
+    u => u.email.toLowerCase() === cleanEmail && u.password === password
+  );
+
+  if (mockUser) {
     return res.json({
       success: true,
       user: {
-        email: user.email,
-        role: user.role
+        email: mockUser.email,
+        role: mockUser.role
       }
     });
   }
 
-  try {
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user || user.password !== password) {
-      return res.status(401).json({ error: 'Invalid credentials. Access Denied.' });
-    }
-
-    res.json({
-      success: true,
-      user: {
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  // Reject all unauthorized / fake emails
+  return res.status(401).json({ error: 'Invalid email or password.' });
 }

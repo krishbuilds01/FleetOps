@@ -20,23 +20,15 @@ export default function Hero({ onNavigate }) {
               A centralized platform for managing fleets, tracking operations, and keeping logistics teams connected.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
               <button 
                 onClick={() => onNavigate('login')}
-                className="inline-flex items-center justify-center text-sm font-semibold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 py-3.5 rounded-lg shadow-md hover:shadow-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-pointer group"
+                className="inline-flex items-center justify-center text-sm font-semibold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer group"
               >
-                Login to Console
+                Sign In to Console
                 <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-0.5" />
               </button>
-              <button 
-                onClick={() => {
-                  const el = document.getElementById('features');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="inline-flex items-center justify-center text-sm font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-6 py-3.5 rounded-lg shadow-sm hover:shadow transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
-              >
-                Explore Platform
-              </button>
+              
             </div>
           </div>
 
