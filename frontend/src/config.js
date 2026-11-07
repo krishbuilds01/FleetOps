@@ -5,7 +5,7 @@ export const getApiUrl = (path) => {
   }
   // 2. Fall back to localhost backend when running client locally
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return `http://localhost:5001${path}`;
+    return `http://localhost:5000${path}`;
   }
   // 3. Fall back to relative API route for same-origin production deployment
   return path;
