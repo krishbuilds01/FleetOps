@@ -377,7 +377,7 @@ Centralized fetch wrapper that auto-attaches `Authorization: Bearer <token>` hea
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/Rish2024/FleetOps.git
+git clone https://github.com/krishbuilds01/FleetOps.git
 cd FleetOps
 ```
 
