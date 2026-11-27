@@ -342,7 +342,7 @@ Centralized fetch wrapper that auto-attaches `Authorization: Bearer <token>` hea
 | `api.addLog(vehicleId, event, type)` | POST new log entry |
 | `api.reportIncident(incidentData)` | POST new incident |
 
-> **Base URL:** `http://localhost:5001/api` in development · `/api` in production (Vercel)
+> **Base URL:** `http://localhost:5000/api` in development · `/api` in production (Vercel)
 
 ---
 
