@@ -413,7 +413,7 @@ Optionally create a `frontend/.env` file:
 ```env
 VITE_DEMO_EMAIL=manager@fleetops.com
 VITE_DEMO_PASSWORD=manager123
-VITE_API_BASE=http://localhost:5000/api
+VITE_API_URL=http://localhost:5000/api
 ```
 
 Start the frontend:
